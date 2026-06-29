@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>コトダマン 穴埋め予測ツール</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #f5f4f0;
+  --surface: #ffffff;
+  --surface-sub: #f0efe9;
+  --border: #d8d6cc;
+  --border-strong: #b0aea4;
+  --text: #1a1a18;
+  --text-sub: #5a5954;
+  --text-muted: #98968f;
+  --accent: #1a6fd4;
+  --accent-bg: #e6f1fb;
+  --accent-border: #85b7eb;
+  --danger: #a32d2d;
+  --danger-bg: #fcebeb;
+  --danger-border: #f09595;
+  --radius: 8px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1c1c1a;
+    --surface: #2a2a27;
+    --surface-sub: #232320;
+    --border: #3a3a36;
+    --border-strong: #555550;
+    --text: #e8e7e2;
+    --text-sub: #a0a09a;
+    --text-muted: #66655f;
+    --accent: #5ba3f0;
+    --accent-bg: #0c2540;
+    --accent-border: #1a5a9a;
+    --danger: #e06060;
+    --danger-bg: #2a1010;
+    --danger-border: #7a2020;
+  }
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  padding: 0 0 3rem;
+}
+
+header {
+  background: var(--surface);
+  border-bottom: 0.5px solid var(--border);
+  padding: 1rem 1.5rem;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+header h1 { font-size: 18px; font-weight: 600; }
+header p { font-size: 13px; color: var(--text-muted); }
+
+.container { max-width: 760px; margin: 0 auto; padding: 1.5rem 1rem; }
+
+.card {
+  background: var(--surface);
+  border: 0.5px solid var(--border);
+  border-radius: 12px;
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+}
+.card-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+
+/* 文字数 */
+.length-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.length-btn {
+  padding: 5px 14px; font-size: 13px;
+  border: 0.5px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface-sub); color: var(--text-sub);
+  cursor: pointer; transition: all 0.12s;
+}
+.length-btn:hover { border-color: var(--accent-border); color: var(--accent); }
+.length-btn.active {
+  background: var(--accent-bg); color: var(--accent);
+  border-color: var(--accent-border); font-weight: 600;
+}
+
+/* スロット */
+.slots-row {
+  display: flex; gap: 8px; justify-content: center;
+  flex-wrap: wrap; margin-bottom: 6px;
+}
+.slot-box { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.slot-num { font-size: 10px; color: var(--text-muted); }
+.slot-cell {
+  width: 48px; height: 52px;
+  border: 2px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface-sub);
+  font-size: 20px; display: flex; align-items: center; justify-content: center;
+  cursor: pointer; user-select: none; transition: all 0.12s;
+  color: var(--text-muted);
+}
+.slot-cell.active {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+.slot-cell.filled {
+  border-color: var(--accent-border);
+  color: var(--accent);
+  font-weight: 700;
+  background: var(--surface);
+  border-style: solid;
+}
+.slot-cell.active.filled {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+}
+.slot-cell.wildcard { border-style: dashed; font-size: 22px; }
+
+.active-hint {
+  text-align: center; font-size: 12px;
+  color: var(--accent); font-weight: 500; min-height: 18px;
+  margin-top: 4px;
+}
+
+/* かなグリッド */
+.kana-layout { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-start; }
+.kana-col-group { display: flex; gap: 4px; }
+.kana-col { display: flex; flex-direction: column; gap: 3px; }
+.col-label {
+  font-size: 10px; color: var(--text-muted);
+  text-align: center; height: 14px; line-height: 14px;
+}
+.kana-btn {
+  width: 30px; height: 30px; font-size: 13px;
+  border: 0.5px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-sub); color: var(--text);
+  cursor: pointer; transition: all 0.1s;
+  display: flex; align-items: center; justify-content: center;
+}
+.kana-btn:hover { background: var(--accent-bg); color: var(--accent); border-color: var(--accent-border); }
+.kana-btn.empty { background: transparent; border-color: transparent; pointer-events: none; }
+
+.vdivider {
+  width: 1px; background: var(--border);
+  align-self: stretch; margin: 0 2px;
+}
+
+/* ボタン行 */
+.controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.btn-search {
+  padding: 9px 22px; font-size: 14px; font-weight: 600;
+  border: none; border-radius: var(--radius);
+  background: var(--accent); color: #fff;
+  cursor: pointer; transition: opacity 0.12s;
+}
+.btn-search:hover { opacity: 0.85; }
+.btn-clear-slot {
+  padding: 5px 12px; font-size: 12px;
+  border: 0.5px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface-sub); color: var(--text-sub);
+  cursor: pointer;
+}
+.btn-clear-slot:hover { background: var(--danger-bg); color: var(--danger); border-color: var(--danger-border); }
+.btn-reset {
+  padding: 9px 14px; font-size: 13px;
+  border: 0.5px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface-sub); color: var(--text-sub);
+  cursor: pointer;
+}
+.btn-reset:hover { background: var(--surface); }
+.count-hint { font-size: 13px; color: var(--text-muted); margin-left: auto; }
+
+/* 結果 */
+.result-count { font-size: 13px; color: var(--text-sub); margin-bottom: 10px; }
+.results-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+}
+.result-card {
+  background: var(--surface-sub);
+  border: 0.5px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+}
+.result-word { font-size: 16px; font-weight: 600; color: var(--text); }
+.result-word .hi { color: var(--accent); }
+.result-chars { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.msg { font-size: 14px; color: var(--text-muted); padding: 0.5rem 0; }
+.more-hint { font-size: 12px; color: var(--text-muted); margin-top: 8px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>コトダマン 穴埋め予測</h1>
+  <p>マスを選んで文字を入力 → 予測する</p>
+</header>
+
+<div class="container">
+
+  <!-- 文字数 -->
+  <div class="card">
+    <div class="card-label">文字数</div>
+    <div class="length-row" id="lengthRow">
+      <button class="length-btn" data-len="2">2文字</button>
+      <button class="length-btn" data-len="3">3文字</button>
+      <button class="length-btn" data-len="4">4文字</button>
+      <button class="length-btn" data-len="5">5文字</button>
+      <button class="length-btn" data-len="6">6文字</button>
+      <button class="length-btn active" data-len="7">7文字</button>
+    </div>
+  </div>
+
+  <!-- スロット -->
+  <div class="card">
+    <div class="card-label">マス</div>
+    <div class="slots-row" id="slotsRow"></div>
+    <div class="active-hint" id="activeHint"></div>
+    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+      <button class="btn-clear-slot" id="clearSlotBtn">このマスをクリア</button>
+      <button class="btn-reset" id="resetBtn">全リセット</button>
+      <span class="count-hint" id="countHint"></span>
+    </div>
+  </div>
+
+  <!-- かな入力 -->
+  <div class="card">
+    <div class="card-label">ひらがな入力</div>
+    <div class="kana-layout" id="kanaLayout"></div>
+  </div>
+
+  <!-- 検索 -->
+  <div class="controls" style="margin-bottom:1rem;">
+    <button class="btn-search" id="searchBtn">🔍 予測する</button>
+  </div>
+
+  <!-- 結果 -->
+  <div id="resultsArea">
+    <p class="msg">マスで文字を指定してから「予測する」を押してください</p>
+  </div>
+
+</div>
+
+<script>
+// ========== 単語リスト（約600語） ==========
+const WORDS = [
+  // 2文字
+  "あか","あお","しろ","くろ","きいろ","みどり","むらさき","ピンク","いぬ","ねこ","うし","うま","ぶた","とり","さる","へび","かめ","くま","きつね","たぬき","うさぎ","ねずみ","しか","はな","き","くさ","いわ","つち","うみ","やま","かわ","いけ","そら","て","め","みみ","はな","くち","あし","かた","くび","つき","ほし","にじ","あめ","ゆき","かぜ","みず","ひ","いえ","まち","にし","ひがし","みなみ","きた","あさ","よる","ひる","なつ","ふゆ","はる","あき","あに","いも","ちち","はは","こ","また",
+  // 3文字
+  "さくら","うめ","もも","なし","かき","くり","まつ","たけ","すし","そば","うどん","パン","ケーキ","アイス","チョコ","のり","みそ","しお","さとう","こめ","むぎ","いも","ねぎ","にく","たまご","ぎゅうにゅう","みかん","りんご","ぶどう","バナナ","イチゴ","メロン","スイカ","トマト","きゅうり","にんじん","かぼちゃ","たまねぎ","じゃがいも","ほうれんそう","カレー","ラーメン","ステーキ","ハンバーグ","サラダ","スープ","パスタ","ピザ","おにぎり","みず","おちゃ","コーヒー","ジュース","ミルク","ビール","ワイン","いしゃ","かんごし","けいかん","きょうし","せんせい","がくせい","でんしゃ","バス","タクシー","ふね","ひこうき","くるま","じてんしゃ","あたま","からだ","かみのけ","まゆげ","まつげ","ほっぺ","あご","のど","むね","はら","せなか","こし","ひじ","ひざ","かかと","うんどう","やきゅう","サッカー","テニス","スキー","スケート","じゅうどう","からて","けんどう","すいえい","ピアノ","ギター","たいこ","フルート","がっこう","びょういん","えき","くうこう","こうえん","スーパー","コンビニ","きょうかしょ","ノート","えんぴつ","ハサミ","つくえ","いす","ベッド","テーブル","ソファー","テレビ","パソコン","スマホ","カメラ","とけい","かさ","くつ","ぼうし","てぶくろ","マフラー","コート","セーター","シャツ","ズボン","スカート","きもの","ゆかた","さんすう","こくご","えいご","りか","しゃかい","おんがく","たいいく","かがく","れきし","ちり","すうがく","ぶつり","せいぶつ","ライオン","キリン","ゾウ","トラ","クマ","サル","ウサギ","カエル","ワニ","ペンギン","コアラ","パンダ","イルカ","クジラ","サメ","タコ","エビ","カニ","ホタル","チョウ","アリ","ハチ","バッタ","カブトムシ","クワガタ","にちようび","げつようび","かようび","すいようび","もくようび","きんようび","どようび","おかあさん","おとうさん","おにいさん","おねえさん","おとうと","いもうと","おじいさん","おばあさん","いとこ","おじさん","おばさん","まご","こんにちは","ありがとう","さようなら","おはよう","こんばんは","ごめんなさい","よろしく","ふじさん","とうきょう","おおさか","なごや","ふくおか","さっぽろ","せんだい","ひろしま","きょうと","こうべ","さいたま","ちば","よこはま","なは","かごしま","くまもと","まつやま","たかまつ","なんきん","ペキン","ソウル","バリ","ローマ","パリ","ニューヨーク","ロンドン","はかた","あさひ","ゆうひ","なみ","しお","いわ","もり","たき","まき","のはら","いなか","みやこ","しろ","てら","じんじゃ","えき","みなと","つり","つりざお","ひも","なわ","いと","はり","ゆみ","やじるし","つるぎ","たて","かぶと","よろい",
+  // 4文字
+  "ほけんしつ","としょしつ","りかしつ","ちょうりしつ","きょうしつ","しょくいんしつ","こうちょうしつ","たいいくかん","うんどうじょう","プール","グラウンド","ちかてつ","しんかんせん","ヘリコプター","オートバイ","ひこうき","でんしゃ","モノレール","ロープウェー","サイクリング","バスケット","バドミントン","バレーボール","ラグビー","ボーリング","ビリヤード","おじいさん","おばあさん","おにいさん","おねえさん","おかあさん","おとうさん","いちねんせい","にねんせい","さんねんせい","よねんせい","ごねんせい","ろくねんせい","こうこうせい","だいがくせい","ランドセル","さんすうのほん","きょうかしょ","ひみつきち","だいどころ","しんしつ","リビング","トイレ","ふろば","げんかん","かいだん","えんがわ","ちかしつ","おくじょう","べらんだ","かべ","てんじょう","ゆか","まど","とびら","えんとつ","まいにち","まいあさ","まいばん","こんにち","きのう","あした","らいしゅう","せんしゅう","こんしゅう","らいねん","きょねん","ことし","ひとつき","いちにちじゅう","ひるやすみ","ほうかご","やすみじかん","しゅくだい","テスト","しけん","かんそうぶん","さくぶん","にっき","かんさつ","じっけん","はっぴょうかい","うんどうかい","ぶんかさい","えんそく","しゅうがくりょこう","いちにちがかり","まほう","まじょ","ゆうしゃ","まおう","ドラゴン","きゅうりゅう","エルフ","ドワーフ","プリンセス","おじょうさま","きし","せんし","まほうつかい","やさい","くだもの","のみもの","たべもの","おかし","ようふく","がっき","どうぶつ","しょくぶつ","きゅうきゅう","けいさつ","しょうぼう","ゆうびん","ぎんこう","やっきょく","デパート","ショッピング","レストラン","カフェ","ラーメンや","すしや","ファミレス","コンビニ","スーパー","ドラッグストア","ホームセンター","ゲームセンター","えいがかん","すいぞくかん","どうぶつえん","はくぶつかん","びじゅつかん","プラネタリウム","ゆうえんち","おんせん","りょかん","ホテル","キャンプじょう","うみのいえ","スキーじょう","つりぼり","きゅうじょう","サッカーじょう","テニスコート","プール","たいいくかん","こうえん","じんじゃ","おてら","きょうかい","ゆうびんきょく","ちょうかん","しりょうかん","でんきや","くすりや","やおや","にくや","さかなや","パンや","ケーキや","はなや","ほんや","がっきや","くつや","めがねや","とけいや","かめらや","でんわや",
+  // 5文字
+  "しんりょうじょ","きゅうきゅうしゃ","こうそくどうろ","きょうかしょ","ほけんしつ","たいいくかん","うんどうじょう","じどうしゃ","しんかんせん","ヘリコプター","とうきょうと","おおさかふ","ほっかいどう","あおもりけん","いわてけん","みやぎけん","あきたけん","やまがたけん","ふくしまけん","いばらきけん","とちぎけん","ぐんまけん","さいたまけん","ちばけん","かながわけん","にいがたけん","とやまけん","いしかわけん","ふくいけん","やまなしけん","ながのけん","しずおかけん","あいちけん","みえけん","しがけん","きょうとふ","ひょうごけん","ならけん","わかやまけん","とっとりけん","しまねけん","おかやまけん","ひろしまけん","やまぐちけん","とくしまけん","かがわけん","えひめけん","こうちけん","ふくおかけん","さがけん","ながさきけん","くまもとけん","おおいたけん","みやざきけん","かごしまけん","おきなわけん","しょうがっこう","ちゅうがっこう","こうこうがっこう","だいがく","ようちえん","ほいくえん","たいいくかん","りかしつ","としょしつ","ほけんしつ","きょうかしょ","れんらくちょう","しゅくだいちょう","つうちひょう","えんぴつけずり","ホッチキス","コンパス","まほうびん","でんきポット","いんすたんと","れいぞうこ","せんたくき","そうじき","かんきせんぷうき","エアコン","テレビ","パソコン","スマートフォン","タブレット","イヤホン","ヘッドホン","ブルートゥース","いんたーねっと","ユーチューブ","どきゅめんと","あにめ","まんが","えいが","ドラマ","バラエティ","ニュース","スポーツ","おんがく","らいぶ","こんさーと","ふぇすてぃばる","うんどうかい","ぶんかさい","はっぴょうかい","えんそく","しゅうがくりょこう","はいきんぐ","キャンプ","バーベキュー","ピクニック","おはなみ","まつり","はなびたいかい","ぼんおどり","かぶきがっせん","おちゃかい","にほんりょうり","せいようりょうり","ちゅうかりょうり","かんこくりょうり","タイりょうり","インドりょうり","イタリアりょうり","フランスりょうり","スペインりょうり","メキシコりょうり","アメリカりょうり","ブラジルりょうり",
+  // 6文字
+  "しんりょうじょ","きゅうきゅうしゃ","こうそくどうろ","としょかん","ほけんしつ","たいいくかん","うんどうじょう","じどうしゃ","しんかんせん","ヘリコプター","ほっかいどう","あおもりけん","いわてけん","みやぎけん","あきたけん","しょうがっこう","ちゅうがっこう","だいがくせい","こうこうせい","ようちえん","ほいくえん","きょうかしょ","れんらくちょう","しゅくだいちょう","でんきポット","れいぞうこ","せんたくき","そうじき","スマートフォン","いんたーねっと","うんどうかい","ぶんかさい","はっぴょうかい","えんそく","しゅうがくりょこう","はいきんぐ","バーベキュー","はなびたいかい","にほんりょうり","ちゅうかりょうり","せいようりょうり","かんこくりょうり","イタリアりょうり","フランスりょうり","ちかてつ","モノレール","しんかんせん","ひこうき","きゅうきゅうしゃ","けいさつかん","しょうぼうし","べんごし","さいばんかん","けんちくか","どうろこうじ","とっきょ","やっきょく","デパートちかいち","はくぶつかん","びじゅつかん","どうぶつえん","すいぞくかん","プラネタリウム","ゆうえんち","おんせんりょかん","スキーじょう","キャンプじょう","さんそうのやど","はいきんぐコース","じてんしゃどうろ","ほこうしゃてんごく","おりんぴっく","パラリンピック","ワールドカップ","オリンピック","しんがたコロナ","ウイルス","ワクチン","マスク","てあらいうがい","けんこうしんだん","けんどう","じゅうどう","からて","あいきどう","すもう","ゴルフ","テニス","バドミントン","バスケットボール","バレーボール","ラグビー","アメリカンフットボール","ハンドボール","ボーリング",
+  // 7文字
+  "しんりょうじょ","きゅうきゅうしゃ","こうそくどうろ","いちごうてつどう","うんどうじょう","しょうがっこう","ちゅうがっこう","こうこうがっこう","だいがくせい","ようちえん","ほいくえん","きょうかしょ","れんらくちょう","しゅくだいちょう","えんぴつけずり","れいぞうこ","せんたくき","スマートフォン","いんたーねっと","うんどうかい","ぶんかさい","はっぴょうかい","しゅうがくりょこう","はなびたいかい","にほんりょうり","ちゅうかりょうり","せいようりょうり","けいさつかん","しょうぼうし","べんごし","さいばんかん","けんちくか","はくぶつかん","びじゅつかん","どうぶつえん","すいぞくかん","プラネタリウム","ゆうえんち","おんせんりょかん","じてんしゃどうろ","ほこうしゃてんごく","バスケットボール","ラグビー","アメリカンフットボール","ハンドボール","ボーリング","にほんけんぽう","しょとくぜい","しょうひぜい","こくみんねんきん","けんこうほけん","ちほうじちたい","しちょうそんちょう","こくどこうつうしょう","もんぶかがくしょう","こうせいろうどうしょう","けいさいさんぎょうしょう","ほっかいどうちほう","とうほくちほう","かんとうちほう","ちゅうぶちほう","きんきちほう","ちゅうごくちほう","しこくちほう","きゅうしゅうちほう","おきなわちほう","さっぽろし","しんさっぽろえき","じょうてつバス","ほっかいどうしんかんせん","とうきょうスカイツリー","こくさいうちゅうステーション","じんこうえいせい","うちゅうせん","ロケットはっしゃ","ちきゅうかがく","たいようけい","ぎんがけい","ブラックホール","スーパーノーバ","ニュートリノ","りょうしりきがく","そうたいせいりろん","しんかろん","げんしりょく","たいようこうはつでん","かぜいりょくはつでん","すいりょくはつでん","ちねつはつでん","バイオマスはつでん","でんきじどうしゃ","すいそじどうしゃ","じりつそうこう","じんこうちのう","ディープラーニング","きかいがくしゅう","ビッグデータ","クラウドコンピューティング","ブロックチェーン","メタバース","バーチャルリアリティ","かくちょうげんじつ","サイバーセキュリティ","プログラミング","アルゴリズム","データベース","ネットワーク","プロトコル","インターフェース","オープンソース","ソフトウェア","ハードウェア","オペレーティングシステム"
+];
+
+// ========== かなデータ ==========
+const SEION = [
+  {l:'あ', c:['あ','い','う','え','お']},
+  {l:'か', c:['か','き','く','け','こ']},
+  {l:'さ', c:['さ','し','す','せ','そ']},
+  {l:'た', c:['た','ち','つ','て','と']},
+  {l:'な', c:['な','に','ぬ','ね','の']},
+  {l:'は', c:['は','ひ','ふ','へ','ほ']},
+  {l:'ま', c:['ま','み','む','め','も']},
+  {l:'や', c:['や','','ゆ','','よ']},
+  {l:'ら', c:['ら','り','る','れ','ろ']},
+  {l:'わ', c:['わ','','を','','ん']},
+];
+const DAKUON = [
+  {l:'が', c:['が','ぎ','ぐ','げ','ご']},
+  {l:'ざ', c:['ざ','じ','ず','ぜ','ぞ']},
+  {l:'だ', c:['だ','ぢ','づ','で','ど']},
+  {l:'ば', c:['ば','び','ぶ','べ','ぼ']},
+  {l:'ぱ', c:['ぱ','ぴ','ぷ','ぺ','ぽ']},
+];
+const SMALL = ['ぁ','ぃ','ぅ','ぇ','ぉ','っ','ゃ','ゅ','ょ','ゎ'];
+
+// ========== 状態 ==========
+let numSlots = 7;
+let slots = [];
+let activeSlot = 0;
+
+function init() {
+  buildKana();
+  setLength(7);
+  document.querySelectorAll('.length-btn').forEach(btn => {
+    btn.addEventListener('click', () => setLength(parseInt(btn.dataset.len)));
+  });
+  document.getElementById('clearSlotBtn').addEventListener('click', () => { slots[activeSlot] = null; render(); });
+  document.getElementById('resetBtn').addEventListener('click', () => { slots = Array(numSlots).fill(null); activeSlot = 0; render(); clearResults(); });
+  document.getElementById('searchBtn').addEventListener('click', search);
+}
+
+function setLength(n) {
+  numSlots = n;
+  slots = Array(n).fill(null);
+  activeSlot = 0;
+  document.querySelectorAll('.length-btn').forEach(b => b.classList.toggle('active', parseInt(b.dataset.len) === n));
+  buildSlots();
+  render();
+  clearResults();
+}
+
+function buildSlots() {
+  const row = document.getElementById('slotsRow');
+  row.innerHTML = '';
+  for(let i = 0; i < numSlots; i++) {
+    const box = document.createElement('div');
+    box.className = 'slot-box';
+    const num = document.createElement('div');
+    num.className = 'slot-num';
+    num.textContent = i + 1;
+    const cell = document.createElement('div');
+    cell.className = 'slot-cell wildcard';
+    cell.textContent = '○';
+    cell.addEventListener('click', () => { activeSlot = i; render(); });
+    box.appendChild(num);
+    box.appendChild(cell);
+    row.appendChild(box);
+  }
+}
+
+function render() {
+  const cells = document.querySelectorAll('.slot-cell');
+  cells.forEach((c, i) => {
+    const filled = !!slots[i];
+    const active = i === activeSlot;
+    c.textContent = filled ? slots[i] : '○';
+    c.className = 'slot-cell' + (!filled ? ' wildcard' : '') + (filled ? ' filled' : '') + (active ? ' active' : '');
+  });
+  const filled = slots.filter(Boolean).length;
+  document.getElementById('countHint').textContent = `${filled}文字確定 / ${numSlots - filled}文字不明`;
+  document.getElementById('activeHint').textContent = `${activeSlot + 1}マス目を選択中`;
+}
+
+function buildKana() {
+  const layout = document.getElementById('kanaLayout');
+  layout.innerHTML = '';
+
+  // 清音
+  const sg = document.createElement('div');
+  sg.className = 'kana-col-group';
+  SEION.forEach(row => {
+    const col = document.createElement('div');
+    col.className = 'kana-col';
+    const lbl = document.createElement('div');
+    lbl.className = 'col-label';
+    lbl.textContent = row.l;
+    col.appendChild(lbl);
+    row.c.forEach(k => {
+      const btn = document.createElement('button');
+      btn.className = k ? 'kana-btn' : 'kana-btn empty';
+      btn.textContent = k;
+      if(k) btn.addEventListener('click', () => { slots[activeSlot] = k; if(activeSlot < numSlots - 1) activeSlot++; render(); });
+      col.appendChild(btn);
+    });
+    sg.appendChild(col);
+  });
+  layout.appendChild(sg);
+
+  const d1 = document.createElement('div'); d1.className = 'vdivider'; layout.appendChild(d1);
+
+  // 濁音
+  const dg = document.createElement('div');
+  dg.className = 'kana-col-group';
+  DAKUON.forEach(row => {
+    const col = document.createElement('div');
+    col.className = 'kana-col';
+    const lbl = document.createElement('div');
+    lbl.className = 'col-label';
+    lbl.textContent = row.l;
+    col.appendChild(lbl);
+    row.c.forEach(k => {
+      const btn = document.createElement('button');
+      btn.className = 'kana-btn';
+      btn.textContent = k;
+      btn.addEventListener('click', () => { slots[activeSlot] = k; if(activeSlot < numSlots - 1) activeSlot++; render(); });
+      col.appendChild(btn);
+    });
+    dg.appendChild(col);
+  });
+  layout.appendChild(dg);
+
+  const d2 = document.createElement('div'); d2.className = 'vdivider'; layout.appendChild(d2);
+
+  // 小文字
+  const sc = document.createElement('div');
+  sc.className = 'kana-col';
+  const slbl = document.createElement('div');
+  slbl.className = 'col-label';
+  slbl.textContent = '小';
+  sc.appendChild(slbl);
+  SMALL.forEach(k => {
+    const btn = document.createElement('button');
+    btn.className = 'kana-btn';
+    btn.textContent = k;
+    btn.addEventListener('click', () => { slots[activeSlot] = k; if(activeSlot < numSlots - 1) activeSlot++; render(); });
+    sc.appendChild(btn);
+  });
+  layout.appendChild(sc);
+}
+
+function search() {
+  const area = document.getElementById('resultsArea');
+  const pattern = slots.slice(0, numSlots);
+  if(!pattern.some(Boolean)) {
+    area.innerHTML = '<p class="msg">少なくとも1文字以上指定してください</p>';
+    return;
+  }
+  const results = WORDS.filter(word => {
+    const chars = [...word];
+    if(chars.length !== numSlots) return false;
+    for(let i = 0; i < numSlots; i++) {
+      if(pattern[i] && chars[i] !== pattern[i]) return false;
+    }
+    return true;
+  });
+  if(results.length === 0) {
+    area.innerHTML = '<p class="msg">該当する単語が見つかりませんでした。条件を変えてみてください。</p>';
+    return;
+  }
+  const shown = results.slice(0, 80);
+  let html = `<p class="result-count">${results.length}件ヒット</p><div class="results-grid">`;
+  shown.forEach(word => {
+    const chars = [...word];
+    const hi = chars.map((c, i) => pattern[i] ? `<span class="hi">${c}</span>` : c).join('');
+    html += `<div class="result-card"><div class="result-word">${hi}</div><div class="result-chars">${numSlots}文字</div></div>`;
+  });
+  html += '</div>';
+  if(results.length > 80) html += `<p class="more-hint">... 他 ${results.length - 80}件</p>`;
+  area.innerHTML = html;
+}
+
+function clearResults() {
+  document.getElementById('resultsArea').innerHTML = '<p class="msg">マスで文字を指定してから「予測する」を押してください</p>';
+}
+
+init();
+</script>
+</body>
+</html>
